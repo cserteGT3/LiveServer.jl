@@ -26,6 +26,9 @@ const WS_VIEWERS = Dict{String,Vector{HTTP.WebSockets.WebSocket}}()
 """Keep track of whether an interruption happened while processing a websocket."""
 const WS_INTERRUPT = Base.Ref{Bool}(false)
 
+"""Folder of the documentation, where servedocs searches."""
+const FOLDERNAME = Ref{String}("docs")
+
 #
 # Functions
 #

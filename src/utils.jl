@@ -12,7 +12,7 @@ in `docs/build`.
 function servedocs_callback!(dw::SimpleWatcher, fp::AbstractString, makejl::AbstractString,
                              literate::String="", skip_dirs::Vector{String}=String[])
     # ignore things happening in build (generated files etc)
-    startswith(fp, joinpath("docs", "build")) && return nothing
+    startswith(fp, joinpath(FOLDERNAME[], "build")) && return nothing
     if !isempty(skip_dirs)
         for dir in skip_dirs
             startswith(fp, dir) && return nothing
@@ -45,15 +45,15 @@ folders and file paths can also be given for files that should be watched in add
 content of `docs/src`.
 """
 function scan_docs!(dw::SimpleWatcher, literate::String="")
-    src = joinpath("docs", "src")
-    if !(isdir("docs") && isdir(src))
-        @error "I didn't find a docs/ or docs/src/ folder."
+    src = joinpath(FOLDERNAME[], "src")
+    if !(isdir(FOLDERNAME[]) && isdir(src))
+        @error "I didn't find a $(FOLDERNAME[])/ or $(FOLDERNAME[])/src/ folder."
     end
-    makejl = joinpath("docs", "make.jl")
+    makejl = joinpath(FOLDERNAME[], "make.jl")
     push!(dw.watchedfiles, WatchedFile(makejl))
-    if isdir("docs")
-        # add all files in `docs/src` to watched files
-        for (root, _, files) ∈ walkdir(joinpath("docs", "src")), file ∈ files
+    if isdir(FOLDERNAME[])
+        # add all files in `$FOLDERNAME/src` to watched files
+        for (root, _, files) ∈ walkdir(joinpath(FOLDERNAME[], "src")), file ∈ files
             push!(dw.watchedfiles, WatchedFile(joinpath(root, file)))
         end
     end
@@ -70,9 +70,9 @@ function scan_docs!(dw::SimpleWatcher, literate::String="")
     # So here we remove from the watchlist all files.md that have a files.jl with the same path.
     remove = Int[]
     if isempty(literate)
-        # assumption is that the scripts are in `docs/src/...` and that the generated markdown
+        # assumption is that the scripts are in `$FOLDERNAME/src/...` and that the generated markdown
         # goes in exactly the same spot so for instance:
-        # docs
+        # $FOLDERNAME
         # └── src
         #     ├── index.jl
         #     └── index.md
@@ -84,8 +84,8 @@ function scan_docs!(dw::SimpleWatcher, literate::String="")
         end
     else
         # assumption is that the scripts are in `literate/` and that the generated markdown goes
-        # in `docs/src` with the same relative paths so for instance:
-        # docs
+        # in `$FOLDERNAME/src` with the same relative paths so for instance:
+        # $FOLDERNAME
         # ├── lit
         # │   └── index.jl
         # └── src
@@ -93,7 +93,7 @@ function scan_docs!(dw::SimpleWatcher, literate::String="")
         for (root, _, files) ∈ walkdir(literate), file ∈ files
             spath = splitext(joinpath(root, file))
             spath[2] == ".jl" || continue
-            path = replace(spath[1], Regex("^$literate") => joinpath("docs", "src"))
+            path = replace(spath[1], Regex("^$literate") => joinpath(FOLDERNAME[], "src"))
             k = findfirst(e -> splitext(e.path) == (path, ".md"), dw.watchedfiles)
             k === nothing || push!(remove, k)
         end
@@ -108,7 +108,8 @@ end
 
 Can be used when developing a package to run the `docs/make.jl` file from Documenter.jl and
 then serve the `docs/build` folder with LiveServer.jl. This function assumes you are in the
-directory `[MyPackage].jl` with a subfolder `docs`.
+directory `[MyPackage].jl` with a subfolder `docs`, though
+the subfolder can be changed with a keyword argument.
 
 * `verbose=false` is a boolean switch to make the server print information about file changes and
 connections.
@@ -117,11 +118,14 @@ assumed that they are in `docs/src`.
 * `doc_env=false` is a boolean switch to make the server start by activating the doc environment or not (i.e. the `Project.toml` in `docs/`).
 * `skip_dir=""` is a subpath of `docs/` where modifications should not trigger the generation of the docs, this is useful for instance if you're using Weave and Weave generates some files in `docs/src/examples` in which case you should give `skip_dir=joinpath("docs","src","examples")`.
 * `skip_dirs=[]` same as `skip_dir`  but for a vector of such dirs. Takes precedence over `skip_dir`.
+* `foldername="docs"` use `foldername` instead of "docs" everywhere.
 """
 function servedocs(; verbose::Bool=false, literate::String="", doc_env::Bool=false,
-                     skip_dir::String="", skip_dirs::Vector{String}=String[])
+                     skip_dir::String="", skip_dirs::Vector{String}=String[], foldername::String="docs")
     # Custom file watcher: it's the standard `SimpleWatcher` but with a custom callback.
     docwatcher = SimpleWatcher()
+
+    FOLDERNAME[] = foldername
 
     if isempty(skip_dirs) && !isempty(skip_dir)
         skip_dirs = [skip_dir]
@@ -134,14 +138,14 @@ function servedocs(; verbose::Bool=false, literate::String="", doc_env::Bool=fal
     makejl = scan_docs!(docwatcher, literate)
 
     if doc_env
-        Pkg.activate("docs/Project.toml")
+        Pkg.activate("$(FOLDERNAME[])/Project.toml")
     end
     # trigger a first pass of Documenter (& possibly Literate)
     Main.include(makejl)
 
     # note the `docs/build` exists here given that if we're here it means the documenter
     # pass did not error and therefore that a docs/build has been generated.
-    serve(docwatcher, dir=joinpath("docs", "build"), verbose=verbose)
+    serve(docwatcher, dir=joinpath(FOLDERNAME[], "build"), verbose=verbose)
     if doc_env
         Pkg.activate()
     end
